@@ -73,42 +73,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select game prompt
+      - name: Generate 5 random words
         id: idea
         run: |
           ACTION="${{ needs.check-last-run.outputs.action }}"
           CUSTOM_PROMPT="${{ inputs.custom_prompt }}"
 
           if [ -n "$CUSTOM_PROMPT" ]; then
-            echo "$CUSTOM_PROMPT" > /tmp/game-prompt.txt
+            PROMPT="$CUSTOM_PROMPT"
             USER_NAME="Manual Dispatch"
           elif [ "$ACTION" = "retry" ]; then
-            cat <<'PROMPT_EOF' > /tmp/game-prompt.txt
-          ${{ needs.check-last-run.outputs.retry_prompt }}
-          PROMPT_EOF
+            PROMPT="${{ needs.check-last-run.outputs.retry_prompt }}"
             USER_NAME="${{ needs.check-last-run.outputs.retry_user }}"
-            echo "Retrying failed build prompt"
+            echo "Retrying failed build with same words"
           else
-            PROMPT_COUNT=$(grep -c '^---$' .github/game-prompts.txt)
-            PROMPT_COUNT=$((PROMPT_COUNT + 1))
-            RANDOM_INDEX=$((RANDOM % PROMPT_COUNT))
-
-            awk -v idx="$RANDOM_INDEX" '
-              BEGIN { count = 0 }
-              /^---$/ { count++; next }
-              count == idx { print }
-            ' .github/game-prompts.txt | sed '/^$/d' > /tmp/game-prompt.txt
+            PROMPT=$(shuf -n 5 .github/words.txt | tr '\n' ' ' | sed 's/ $//')
             USER_NAME="Hourly Auto Builder"
           fi
 
           BUILD_ID="auto-$(date -u +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)"
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
           echo "user_name=$USER_NAME" >> $GITHUB_OUTPUT
+          echo "prompt=$PROMPT" >> $GITHUB_OUTPUT
 
           echo "Action: $ACTION"
-          echo "Selected prompt:"
-          cat /tmp/game-prompt.txt
-          echo ""
+          echo "Words: $PROMPT"
           echo "Build ID: $BUILD_ID"
           echo "User: $USER_NAME"
 
@@ -116,16 +105,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          PROMPT=$(cat /tmp/game-prompt.txt)
-          BUILD_ID="${{ steps.idea.outputs.build_id }}"
-          USER_NAME="${{ steps.idea.outputs.user_name }}"
-
           gh workflow run game-builder.yml \
             --repo ${{ github.repository }} \
-            -f build_id="$BUILD_ID" \
-            -f request_text="$PROMPT" \
+            -f build_id="${{ steps.idea.outputs.build_id }}" \
+            -f request_text="${{ steps.idea.outputs.prompt }}" \
             -f game_id="" \
             -f user_email="auto-builder@form-and-play.game" \
-            -f user_name="$USER_NAME"
+            -f user_name="${{ steps.idea.outputs.user_name }}"
 
-          echo "Triggered game-builder.yml with build_id=$BUILD_ID (user=$USER_NAME)"
+          echo "Triggered game-builder.yml with words: ${{ steps.idea.outputs.prompt }}"
