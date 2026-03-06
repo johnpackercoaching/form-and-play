@@ -113,6 +113,9 @@ jobs:
           echo "Build input written to /tmp/game-edit-input.json"
           cat /tmp/game-edit-input.json
 
+      # ═══════════════════════════════════════════════════════════
+      # PHASE 1: BUILD THE GAME
+      # ═══════════════════════════════════════════════════════════
       - name: Run Claude Game Builder
         id: claude-build
         env:
@@ -127,7 +130,7 @@ jobs:
             --verbose \
             --allowedTools "Task,Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch" \
             --dangerously-skip-permissions \
-            2>&1 | tee claude-output.txt
+            2>&1 | tee claude-build-output.txt
 
           if [ -f build-result.json ]; then
             STATUS=$(python3 -c "import json; d=json.load(open('build-result.json')); print(d.get('status','failed'))" 2>/dev/null || echo "failed")
@@ -140,13 +143,13 @@ jobs:
           echo "build_status=$STATUS" >> $GITHUB_OUTPUT
           echo "build_description=$DESCRIPTION" >> $GITHUB_OUTPUT
 
-      - name: Upload agent log
+      - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: game-build-log-${{ inputs.build_id }}
           path: |
-            claude-output.txt
+            claude-build-output.txt
             build-result.json
           retention-days: 30
           if-no-files-found: warn
@@ -163,7 +166,7 @@ jobs:
             GAME_ID=$(ls -td src/games/[0-9]* 2>/dev/null | head -1 | xargs -I{} basename {} 2>/dev/null || echo "")
           fi
           echo "game_id=$GAME_ID" >> $GITHUB_OUTPUT
-          echo "Gameplay QA target: $GAME_ID"
+          echo "QA target: $GAME_ID"
 
       - name: Start dev server for QA
         if: steps.claude-build.outputs.build_status == 'completed' && steps.qa-target.outputs.game_id != ''
@@ -210,123 +213,79 @@ jobs:
           " 2>&1
           echo "thumbnail_generated=$([[ $? -eq 0 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
 
-      - name: Functional gameplay test
+      # ═══════════════════════════════════════════════════════════
+      # PHASE 2: COMPREHENSIVE QA (Claude Code-driven)
+      # Claude reads the game source + meta.json, generates
+      # game-specific Playwright tests, runs them, and fixes
+      # bugs iteratively until all tests pass.
+      # ═══════════════════════════════════════════════════════════
+      - name: Comprehensive gameplay QA
         if: steps.claude-build.outputs.build_status == 'completed' && steps.qa-target.outputs.game_id != ''
-        id: gameplay-test
+        id: gameplay-qa
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           GAME_ID="${{ steps.qa-target.outputs.game_id }}"
-          echo "Running functional gameplay test for: $GAME_ID"
+          echo "Running comprehensive QA for: $GAME_ID"
+          echo "$GAME_ID" > /tmp/qa-target.txt
 
-          GAME_ID_ENV="$GAME_ID" node -e "
-          const { chromium } = require('playwright');
-          (async () => {
-            const gameId = process.env.GAME_ID_ENV;
-            const browser = await chromium.launch({ headless: true });
-            const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
-            const page = await context.newPage();
+          QA_PROMPT=$(cat .claude/game-qa-prompt.md)
 
-            const errors = [];
-            page.on('pageerror', err => errors.push('PAGE_ERROR: ' + err.message));
-            page.on('console', msg => {
-              if (msg.type() === 'error') errors.push('CONSOLE_ERROR: ' + msg.text());
-            });
+          # Prepend the game ID context
+          FULL_PROMPT="The game to QA test is: ${GAME_ID}
 
-            try {
-              // 1. Load the arcade
-              await page.goto('http://localhost:5175', { waitUntil: 'domcontentloaded', timeout: 30000 });
-              console.log('PASS: Page loaded');
+          The dev server is already running at http://localhost:5175.
 
-              // 2. Find and click the game card
-              const card = await page.waitForSelector('[data-game-id=\"' + gameId + '\"]', { timeout: 15000 });
-              if (!card) throw new Error('Game card not found for: ' + gameId);
-              await card.click();
-              console.log('PASS: Game card clicked');
+          Read the game source at src/games/${GAME_ID}/index.ts and src/games/${GAME_ID}/meta.json first.
+          Then follow the QA prompt below exactly.
 
-              // 3. Wait for Phaser canvas to render
-              const canvas = await page.waitForSelector('canvas', { timeout: 15000 });
-              if (!canvas) throw new Error('Canvas not found after launching game');
-              console.log('PASS: Canvas rendered');
+          ${QA_PROMPT}"
 
-              // 4. Wait for QA instrumentation to initialize
-              await page.waitForFunction(() => window.__GAME_QA && window.__GAME_QA.state && typeof window.__GAME_QA.state.score === 'number', { timeout: 10000 });
-              console.log('PASS: QA instrumentation active');
+          claude -p "$FULL_PROMPT" \
+            --model opus \
+            --output-format stream-json \
+            --verbose \
+            --allowedTools "Task,Read,Edit,Write,Bash,Glob,Grep" \
+            --dangerously-skip-permissions \
+            2>&1 | tee claude-qa-output.txt
 
-              // 5. Read initial state
-              const initialState = await page.evaluate(() => JSON.parse(JSON.stringify(window.__GAME_QA.state)));
-              console.log('Initial state: score=' + initialState.score + ' shoalSize=' + initialState.shoalSize);
-
-              if (typeof initialState.shoalSize !== 'number' || initialState.shoalSize < 1) {
-                throw new Error('Invalid initial shoalSize: ' + initialState.shoalSize);
-              }
-              console.log('PASS: Valid initial game state');
-
-              // 6. Simulate player input (move in all directions)
-              const directions = [
-                { key: 'ArrowRight', duration: 800 },
-                { key: 'ArrowDown', duration: 600 },
-                { key: 'ArrowLeft', duration: 800 },
-                { key: 'ArrowUp', duration: 600 },
-                { key: 'ArrowRight', duration: 400 },
-              ];
-
-              for (const dir of directions) {
-                await page.keyboard.down(dir.key);
-                await new Promise(r => setTimeout(r, dir.duration));
-                await page.keyboard.up(dir.key);
-                await new Promise(r => setTimeout(r, 100));
-              }
-              console.log('PASS: Player input simulated');
-
-              // 7. Verify game is still running (elapsed time advanced)
-              const afterInputState = await page.evaluate(() => JSON.parse(JSON.stringify(window.__GAME_QA.state)));
-              console.log('After input: score=' + afterInputState.score + ' shoalSize=' + afterInputState.shoalSize + ' elapsed=' + afterInputState.elapsed);
-
-              if (typeof afterInputState.elapsed !== 'number' || afterInputState.elapsed < 1) {
-                throw new Error('Game loop not advancing: elapsed=' + afterInputState.elapsed);
-              }
-              console.log('PASS: Game loop running');
-
-              // 8. Let game run for a few more seconds to test spawning/collection
-              await new Promise(r => setTimeout(r, 3000));
-              const finalState = await page.evaluate(() => JSON.parse(JSON.stringify(window.__GAME_QA.state)));
-              console.log('Final state: score=' + finalState.score + ' shoalSize=' + finalState.shoalSize + ' elapsed=' + finalState.elapsed);
-
-              if (finalState.elapsed <= afterInputState.elapsed) {
-                throw new Error('Game stalled between checks');
-              }
-              console.log('PASS: Game continues running');
-
-              // 9. Check for console errors
-              const criticalErrors = errors.filter(e => !e.includes('favicon') && !e.includes('404'));
-              if (criticalErrors.length > 0) {
-                console.log('Console errors found:');
-                criticalErrors.forEach(e => console.log('  ' + e));
-                throw new Error('Game has ' + criticalErrors.length + ' console error(s)');
-              }
-              console.log('PASS: No console errors');
-
-              console.log('');
-              console.log('=== FUNCTIONAL TEST PASSED ===');
-              console.log('Game: ' + gameId);
-              console.log('Final score: ' + finalState.score);
-              console.log('Shoal size: ' + finalState.shoalSize);
-              console.log('Elapsed: ' + finalState.elapsed + 's');
-
-            } catch (err) {
-              console.error('FAIL: ' + err.message);
-              process.exit(1);
-            } finally {
-              await browser.close();
-            }
-          })();
-          " 2>&1
-
-          if [ $? -ne 0 ]; then
-            echo "::warning::Functional gameplay test failed for $GAME_ID"
-            echo "test_passed=false" >> $GITHUB_OUTPUT
+          # Check QA result
+          if [ -f qa-result.json ]; then
+            QA_STATUS=$(python3 -c "import json; d=json.load(open('qa-result.json')); print(d.get('status','failed'))" 2>/dev/null || echo "failed")
+            BUGS_FOUND=$(python3 -c "import json; d=json.load(open('qa-result.json')); print(d.get('bugs_found',0))" 2>/dev/null || echo "0")
+            BUGS_FIXED=$(python3 -c "import json; d=json.load(open('qa-result.json')); print(d.get('bugs_fixed',0))" 2>/dev/null || echo "0")
+            TESTS_PASSED=$(python3 -c "import json; d=json.load(open('qa-result.json')); print(d.get('tests_passed',0))" 2>/dev/null || echo "0")
+            TESTS_TOTAL=$(python3 -c "import json; d=json.load(open('qa-result.json')); print(d.get('tests_total',0))" 2>/dev/null || echo "0")
           else
-            echo "test_passed=true" >> $GITHUB_OUTPUT
+            QA_STATUS="failed"
+            BUGS_FOUND="unknown"
+            BUGS_FIXED="unknown"
+            TESTS_PASSED="0"
+            TESTS_TOTAL="0"
           fi
+
+          echo "qa_status=$QA_STATUS" >> $GITHUB_OUTPUT
+          echo "bugs_found=$BUGS_FOUND" >> $GITHUB_OUTPUT
+          echo "bugs_fixed=$BUGS_FIXED" >> $GITHUB_OUTPUT
+          echo "tests_passed=$TESTS_PASSED" >> $GITHUB_OUTPUT
+          echo "tests_total=$TESTS_TOTAL" >> $GITHUB_OUTPUT
+          echo "QA Result: $QA_STATUS ($TESTS_PASSED/$TESTS_TOTAL tests, $BUGS_FOUND bugs found, $BUGS_FIXED fixed)"
+
+          if [ "$QA_STATUS" != "passed" ]; then
+            echo "::warning::Comprehensive QA failed for $GAME_ID"
+          fi
+
+      - name: Upload QA log
+        if: always() && steps.qa-target.outputs.game_id != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-qa-log-${{ inputs.build_id }}
+          path: |
+            claude-qa-output.txt
+            qa-result.json
+            tests/game-qa-*.spec.ts
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Stop dev server
         if: always()
@@ -336,14 +295,18 @@ jobs:
             rm -f /tmp/devserver.pid
           fi
 
+      # ═══════════════════════════════════════════════════════════
+      # PHASE 3: SHIP IT (only if QA passed)
+      # ═══════════════════════════════════════════════════════════
       - name: Clean up agent artifacts before PR
         if: steps.claude-build.outputs.build_status == 'completed'
         run: |
-          rm -f claude-output.txt build-result.json
+          rm -f claude-build-output.txt claude-qa-output.txt build-result.json qa-result.json
+          # Keep the generated test file -- it's part of the deliverable
           echo "Removed agent artifacts"
 
       - name: Create Pull Request
-        if: steps.claude-build.outputs.build_status == 'completed'
+        if: steps.claude-build.outputs.build_status == 'completed' && steps.gameplay-qa.outputs.qa_status == 'passed'
         id: create-pr
         uses: peter-evans/create-pull-request@v6
         with:
@@ -362,18 +325,57 @@ jobs:
             **What was built:**
             ${{ steps.claude-build.outputs.build_description }}
 
+            **QA Results:**
+            - Status: ${{ steps.gameplay-qa.outputs.qa_status }}
+            - Tests: ${{ steps.gameplay-qa.outputs.tests_passed }}/${{ steps.gameplay-qa.outputs.tests_total }} passing
+            - Bugs found: ${{ steps.gameplay-qa.outputs.bugs_found }}
+            - Bugs fixed: ${{ steps.gameplay-qa.outputs.bugs_fixed }}
+
             ---
             Generated by Form & Play Game Builder.
           labels: game-builder
 
-      - name: Auto-merge Pull Request
+      - name: Create PR with QA warning
+        if: steps.claude-build.outputs.build_status == 'completed' && steps.gameplay-qa.outputs.qa_status != 'passed'
+        id: create-pr-qa-warn
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GH_PAT }}
+          branch: game-build/${{ inputs.build_id }}
+          title: "[QA ISSUES] Game Build: ${{ inputs.build_id }}"
+          delete-branch: true
+          body: |
+            ## Game Build Request
+
+            **Build ID:** `${{ inputs.build_id }}`
+
+            **Request:**
+            > ${{ inputs.request_text }}
+
+            **What was built:**
+            ${{ steps.claude-build.outputs.build_description }}
+
+            **QA Results: ISSUES FOUND**
+            - Status: ${{ steps.gameplay-qa.outputs.qa_status }}
+            - Tests: ${{ steps.gameplay-qa.outputs.tests_passed }}/${{ steps.gameplay-qa.outputs.tests_total }} passing
+            - Bugs found: ${{ steps.gameplay-qa.outputs.bugs_found }}
+            - Bugs fixed: ${{ steps.gameplay-qa.outputs.bugs_fixed }}
+
+            > This game has QA issues that could not be automatically resolved.
+            > Review the QA log artifact for details before merging.
+
+            ---
+            Generated by Form & Play Game Builder.
+          labels: game-builder,qa-issues
+
+      - name: Auto-merge Pull Request (QA passed)
         if: steps.create-pr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
           gh pr merge "$PR_NUMBER" --squash --delete-branch
-          echo "PR #$PR_NUMBER merged"
+          echo "PR #$PR_NUMBER merged (QA passed)"
 
       - name: Update Firestore build status
         if: always() && steps.pre-validate.outputs.credits_ok == 'true'
@@ -383,18 +385,24 @@ jobs:
         run: |
           BUILD_STATUS="${{ steps.claude-build.outputs.build_status }}"
           BUILD_DESC="${{ steps.claude-build.outputs.build_description }}"
-          if [ "$BUILD_STATUS" = "completed" ]; then
-            node scripts/update-build-status.js \
-              --build-id "${{ inputs.build_id }}" \
-              --status "completed" \
-              --fix-description "${BUILD_DESC:-Build completed}" || true
+          QA_STATUS="${{ steps.gameplay-qa.outputs.qa_status }}"
+
+          if [ "$BUILD_STATUS" = "completed" ] && [ "$QA_STATUS" = "passed" ]; then
+            FINAL_STATUS="completed"
+            FINAL_DESC="${BUILD_DESC:-Build completed} (QA: ${{ steps.gameplay-qa.outputs.tests_passed }}/${{ steps.gameplay-qa.outputs.tests_total }} tests passed)"
+          elif [ "$BUILD_STATUS" = "completed" ]; then
+            FINAL_STATUS="completed"
+            FINAL_DESC="${BUILD_DESC:-Build completed} (QA: ${{ steps.gameplay-qa.outputs.qa_status }}, needs review)"
           else
-            node scripts/update-build-status.js \
-              --build-id "${{ inputs.build_id }}" \
-              --status "failed" \
-              --fix-description "${BUILD_DESC:-Build failed}" || true
+            FINAL_STATUS="failed"
+            FINAL_DESC="${BUILD_DESC:-Build failed}"
           fi
+
+          node scripts/update-build-status.js \
+            --build-id "${{ inputs.build_id }}" \
+            --status "$FINAL_STATUS" \
+            --fix-description "$FINAL_DESC" || true
 
       - name: Clean up
         if: always()
-        run: rm -f /tmp/firebase-service-account.json /tmp/game-edit-input.json
+        run: rm -f /tmp/firebase-service-account.json /tmp/game-edit-input.json /tmp/qa-target.txt

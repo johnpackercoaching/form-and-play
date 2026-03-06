@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { initQA, updateQA } from '../../shared/qa-instrumentation';
+import { initQA, updateQA, qaEvent } from '../../shared/qa-instrumentation';
 
 const GAME_ID = '001-shoal';
 const W = 1280;
@@ -362,7 +362,19 @@ class ShoalScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.gameOver) {
+      updateQA({
+        score: this.score,
+        state: 'gameover',
+        elapsed: Math.floor(this.elapsed / 1000),
+        playerX: this.shoal[0]?.x ?? 0,
+        playerY: this.shoal[0]?.y ?? 0,
+        shoalSize: this.shoal.length,
+        catalystActive: false,
+        hazardCount: 0,
+        petalCount: 0,
+      });
       if (this.restartKey.isDown) {
+        qaEvent('restart', {});
         this.cleanupAll();
         this.scene.restart();
       }
@@ -453,6 +465,7 @@ class ShoalScene extends Phaser.Scene {
           this.score++;
           this.scoreText.setText(`${this.score}`);
           this.collectEffect(p.x, p.y);
+          qaEvent('petal-collected', { score: this.score, shoalSize: this.shoal.length + 1 });
           // Add new fish to shoal
           const last = this.shoal[this.shoal.length - 1];
           this.spawnFish(last.x, last.y);
@@ -511,6 +524,7 @@ class ShoalScene extends Phaser.Scene {
             } else {
               // Lose this fish and all behind it
               this.shakeAmount = 8;
+              qaEvent('fish-lost', { lostCount: this.shoal.length - i, remainingShoal: i });
               const lost = this.shoal.splice(i);
               for (const lf of lost) {
                 this.lostFishEffect(lf.x, lf.y);
@@ -594,9 +608,14 @@ class ShoalScene extends Phaser.Scene {
 
     updateQA({
       score: this.score,
+      state: this.gameOver ? 'gameover' : 'playing',
+      elapsed: Math.floor(this.elapsed / 1000),
+      playerX: lead.x,
+      playerY: lead.y,
       shoalSize: this.shoal.length,
       catalystActive: this.catalystActive,
-      elapsed: Math.floor(this.elapsed / 1000),
+      hazardCount: this.hazards.filter(h => h.alive).length,
+      petalCount: this.petals.filter(p => p.alive).length,
     });
   }
 
@@ -604,6 +623,7 @@ class ShoalScene extends Phaser.Scene {
     this.catalystActive = true;
     this.catalystTimer = CATALYST_DURATION;
     this.catalystFlash = 0;
+    qaEvent('catalyst-collected', { duration: CATALYST_DURATION });
 
     // Flash effect
     const flash = this.add.graphics().setDepth(90);
@@ -676,6 +696,7 @@ class ShoalScene extends Phaser.Scene {
   private triggerGameOver(): void {
     this.gameOver = true;
     this.shakeAmount = 15;
+    qaEvent('game-over', { finalScore: this.score, shoalSize: this.shoal.length, elapsed: Math.floor(this.elapsed / 1000) });
 
     // Update high score
     if (this.score > this.highScore) {
