@@ -10,6 +10,10 @@ on:
         required: false
         type: string
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   check-last-run:
     runs-on: ubuntu-latest
@@ -103,7 +107,7 @@ jobs:
 
       - name: Trigger game builder
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run game-builder.yml \
             --repo ${{ github.repository }} \
