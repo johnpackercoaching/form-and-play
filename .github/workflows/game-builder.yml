@@ -210,6 +210,124 @@ jobs:
           " 2>&1
           echo "thumbnail_generated=$([[ $? -eq 0 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
 
+      - name: Functional gameplay test
+        if: steps.claude-build.outputs.build_status == 'completed' && steps.qa-target.outputs.game_id != ''
+        id: gameplay-test
+        run: |
+          GAME_ID="${{ steps.qa-target.outputs.game_id }}"
+          echo "Running functional gameplay test for: $GAME_ID"
+
+          GAME_ID_ENV="$GAME_ID" node -e "
+          const { chromium } = require('playwright');
+          (async () => {
+            const gameId = process.env.GAME_ID_ENV;
+            const browser = await chromium.launch({ headless: true });
+            const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+            const page = await context.newPage();
+
+            const errors = [];
+            page.on('pageerror', err => errors.push('PAGE_ERROR: ' + err.message));
+            page.on('console', msg => {
+              if (msg.type() === 'error') errors.push('CONSOLE_ERROR: ' + msg.text());
+            });
+
+            try {
+              // 1. Load the arcade
+              await page.goto('http://localhost:5175', { waitUntil: 'domcontentloaded', timeout: 30000 });
+              console.log('PASS: Page loaded');
+
+              // 2. Find and click the game card
+              const card = await page.waitForSelector('[data-game-id=\"' + gameId + '\"]', { timeout: 15000 });
+              if (!card) throw new Error('Game card not found for: ' + gameId);
+              await card.click();
+              console.log('PASS: Game card clicked');
+
+              // 3. Wait for Phaser canvas to render
+              const canvas = await page.waitForSelector('canvas', { timeout: 15000 });
+              if (!canvas) throw new Error('Canvas not found after launching game');
+              console.log('PASS: Canvas rendered');
+
+              // 4. Wait for QA instrumentation to initialize
+              await page.waitForFunction(() => window.__GAME_QA && window.__GAME_QA.state && typeof window.__GAME_QA.state.score === 'number', { timeout: 10000 });
+              console.log('PASS: QA instrumentation active');
+
+              // 5. Read initial state
+              const initialState = await page.evaluate(() => JSON.parse(JSON.stringify(window.__GAME_QA.state)));
+              console.log('Initial state: score=' + initialState.score + ' shoalSize=' + initialState.shoalSize);
+
+              if (typeof initialState.shoalSize !== 'number' || initialState.shoalSize < 1) {
+                throw new Error('Invalid initial shoalSize: ' + initialState.shoalSize);
+              }
+              console.log('PASS: Valid initial game state');
+
+              // 6. Simulate player input (move in all directions)
+              const directions = [
+                { key: 'ArrowRight', duration: 800 },
+                { key: 'ArrowDown', duration: 600 },
+                { key: 'ArrowLeft', duration: 800 },
+                { key: 'ArrowUp', duration: 600 },
+                { key: 'ArrowRight', duration: 400 },
+              ];
+
+              for (const dir of directions) {
+                await page.keyboard.down(dir.key);
+                await new Promise(r => setTimeout(r, dir.duration));
+                await page.keyboard.up(dir.key);
+                await new Promise(r => setTimeout(r, 100));
+              }
+              console.log('PASS: Player input simulated');
+
+              // 7. Verify game is still running (elapsed time advanced)
+              const afterInputState = await page.evaluate(() => JSON.parse(JSON.stringify(window.__GAME_QA.state)));
+              console.log('After input: score=' + afterInputState.score + ' shoalSize=' + afterInputState.shoalSize + ' elapsed=' + afterInputState.elapsed);
+
+              if (typeof afterInputState.elapsed !== 'number' || afterInputState.elapsed < 1) {
+                throw new Error('Game loop not advancing: elapsed=' + afterInputState.elapsed);
+              }
+              console.log('PASS: Game loop running');
+
+              // 8. Let game run for a few more seconds to test spawning/collection
+              await new Promise(r => setTimeout(r, 3000));
+              const finalState = await page.evaluate(() => JSON.parse(JSON.stringify(window.__GAME_QA.state)));
+              console.log('Final state: score=' + finalState.score + ' shoalSize=' + finalState.shoalSize + ' elapsed=' + finalState.elapsed);
+
+              if (finalState.elapsed <= afterInputState.elapsed) {
+                throw new Error('Game stalled between checks');
+              }
+              console.log('PASS: Game continues running');
+
+              // 9. Check for console errors
+              const criticalErrors = errors.filter(e => !e.includes('favicon') && !e.includes('404'));
+              if (criticalErrors.length > 0) {
+                console.log('Console errors found:');
+                criticalErrors.forEach(e => console.log('  ' + e));
+                throw new Error('Game has ' + criticalErrors.length + ' console error(s)');
+              }
+              console.log('PASS: No console errors');
+
+              console.log('');
+              console.log('=== FUNCTIONAL TEST PASSED ===');
+              console.log('Game: ' + gameId);
+              console.log('Final score: ' + finalState.score);
+              console.log('Shoal size: ' + finalState.shoalSize);
+              console.log('Elapsed: ' + finalState.elapsed + 's');
+
+            } catch (err) {
+              console.error('FAIL: ' + err.message);
+              process.exit(1);
+            } finally {
+              await browser.close();
+            }
+          })();
+          " 2>&1
+
+          if [ $? -ne 0 ]; then
+            echo "::warning::Functional gameplay test failed for $GAME_ID"
+            echo "test_passed=false" >> $GITHUB_OUTPUT
+          else
+            echo "test_passed=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Stop dev server
         if: always()
         run: |
