@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Updates a Firestore build request document with status info
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+
 const args = process.argv.slice(2);
 
 function getArg(name) {
@@ -20,7 +22,7 @@ if (!buildId || !status) {
 
 async function main() {
   try {
-    initializeApp({ credential: cert(JSON.parse(require('fs').readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'))) });
+    initializeApp({ credential: cert(JSON.parse(readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'))) });
     const db = getFirestore();
     const update = { status, updatedAt: new Date().toISOString() };
     if (fixDescription) update.fixDescription = fixDescription;

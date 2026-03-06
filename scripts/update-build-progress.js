@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Posts progress updates to a Firestore build request
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+
 const args = process.argv.slice(2);
 
 function getArg(name) {
@@ -20,7 +22,7 @@ if (!buildId || !phase) {
 
 async function main() {
   try {
-    initializeApp({ credential: cert(JSON.parse(require('fs').readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'))) });
+    initializeApp({ credential: cert(JSON.parse(readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'))) });
     const db = getFirestore();
     await db.collection('buildRequests').doc(buildId).update({
       currentPhase: phase,
