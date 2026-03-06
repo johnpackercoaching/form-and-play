@@ -63,7 +63,7 @@ export class Gallery {
 
     const count = document.createElement('span');
     count.className = 'nav-count';
-    count.textContent = `${games.length} games`;
+    count.textContent = games.length === 1 ? '1 game' : `${games.length} games`;
 
     brand.append(mark, title);
     this.navEl.append(brand, count);
@@ -73,35 +73,36 @@ export class Gallery {
     this.galleryEl = document.createElement('main');
     this.galleryEl.className = 'gallery';
 
-    // Hero
-    const hero = document.createElement('section');
-    hero.className = 'gallery-hero';
-
-    const heroTitle = document.createElement('h1');
-    heroTitle.className = 'hero-title';
-    heroTitle.innerHTML = 'Every game<br>is a <em>design</em><br>piece.';
-
-    const heroSub = document.createElement('p');
-    heroSub.className = 'hero-subtitle';
-    heroSub.textContent = 'An arcade where form and content are inseparable. Every visual choice is deliberate. Every mechanic serves the design.';
-
-    hero.append(heroTitle, heroSub);
-
     if (games.length === 0) {
+      // Empty state -- inviting, not preachy
       const empty = document.createElement('div');
       empty.className = 'gallery-empty';
 
-      const emptyTitle = document.createElement('h2');
+      // Animated shapes as a playful loading/waiting state
+      const shapes = document.createElement('div');
+      shapes.className = 'empty-shapes';
+
+      const circle = document.createElement('div');
+      circle.className = 'empty-shape empty-shape--circle';
+      const square = document.createElement('div');
+      square.className = 'empty-shape empty-shape--square';
+      const triangle = document.createElement('div');
+      triangle.className = 'empty-shape empty-shape--triangle';
+
+      shapes.append(circle, square, triangle);
+
+      const emptyTitle = document.createElement('h1');
       emptyTitle.className = 'gallery-empty-title';
-      emptyTitle.textContent = 'The canvas awaits';
+      emptyTitle.textContent = 'Games incoming';
 
       const emptySub = document.createElement('p');
       emptySub.className = 'gallery-empty-subtitle';
-      emptySub.textContent = 'Games will appear here as The Studio builds them.';
+      emptySub.textContent = 'New games drop every hour. Check back soon.';
 
-      empty.append(emptyTitle, emptySub);
-      this.galleryEl.append(hero, empty);
+      empty.append(shapes, emptyTitle, emptySub);
+      this.galleryEl.append(empty);
     } else {
+      // Game grid -- games front and center, no hero manifesto
       const grid = document.createElement('div');
       grid.className = 'gallery-grid';
 
@@ -113,7 +114,7 @@ export class Gallery {
         grid.appendChild(card.render());
       });
 
-      this.galleryEl.append(hero, grid);
+      this.galleryEl.append(grid);
     }
 
     this.container.appendChild(this.galleryEl);
