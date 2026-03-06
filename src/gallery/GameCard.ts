@@ -28,37 +28,44 @@ export class GameCard {
       }
     };
 
+    // Set accent color from palette
+    if (this.meta.palette && this.meta.palette.length > 0) {
+      card.style.setProperty('--card-accent', this.meta.palette[0]);
+    }
+
     // Thumbnail
     if (this.meta.thumbnail) {
       const img = document.createElement('img');
       img.className = 'game-card-thumbnail';
       img.src = this.meta.thumbnail;
-      img.alt = this.meta.title;
+      img.alt = `Screenshot of ${this.meta.title}`;
       img.loading = 'lazy';
       card.appendChild(img);
     }
 
-    // Geometric accent
+    // Principle badge (top-left, always visible)
+    if (this.meta.principle) {
+      const badge = document.createElement('span');
+      badge.className = 'game-card-principle-badge';
+      badge.textContent = this.meta.principle;
+      badge.setAttribute('aria-hidden', 'true');
+      card.appendChild(badge);
+    }
+
+    // Geometric accent (top-right)
     const accent = document.createElement('div');
     accent.className = `game-card-accent game-card-accent--${this.shape}`;
+    accent.setAttribute('aria-hidden', 'true');
     card.appendChild(accent);
 
-    // Info overlay
+    // Info overlay (bottom)
     const info = document.createElement('div');
     info.className = 'game-card-info';
 
     const title = document.createElement('h3');
     title.className = 'game-card-title';
     title.textContent = this.meta.title;
-
     info.appendChild(title);
-
-    if (this.meta.principle) {
-      const principle = document.createElement('span');
-      principle.className = 'game-card-principle';
-      principle.textContent = this.meta.principle;
-      info.appendChild(principle);
-    }
 
     card.appendChild(info);
 

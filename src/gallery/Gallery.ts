@@ -51,11 +51,20 @@ export class Gallery {
 
     const brand = document.createElement('div');
     brand.className = 'nav-brand';
-    brand.setAttribute('aria-label', 'Form & Play home');
+    brand.setAttribute('role', 'link');
+    brand.setAttribute('tabindex', '0');
+    brand.setAttribute('aria-label', 'Form and Play home');
     brand.onclick = () => this.showGallery();
+    brand.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.showGallery();
+      }
+    };
 
     const mark = document.createElement('span');
     mark.className = 'nav-mark';
+    mark.setAttribute('aria-hidden', 'true');
 
     const title = document.createElement('span');
     title.className = 'nav-title';
@@ -63,7 +72,12 @@ export class Gallery {
 
     const count = document.createElement('span');
     count.className = 'nav-count';
-    count.textContent = games.length === 1 ? '1 game' : `${games.length} games`;
+    count.setAttribute('aria-live', 'polite');
+    count.textContent = games.length === 0
+      ? '0 games'
+      : games.length === 1
+        ? '1 game'
+        : `${games.length} games`;
 
     brand.append(mark, title);
     this.navEl.append(brand, count);
@@ -72,52 +86,96 @@ export class Gallery {
     // Gallery container
     this.galleryEl = document.createElement('main');
     this.galleryEl.className = 'gallery';
+    this.galleryEl.setAttribute('role', 'main');
 
     if (games.length === 0) {
-      // Empty state -- inviting, not preachy
-      const empty = document.createElement('div');
-      empty.className = 'gallery-empty';
-
-      // Animated shapes as a playful loading/waiting state
-      const shapes = document.createElement('div');
-      shapes.className = 'empty-shapes';
-
-      const circle = document.createElement('div');
-      circle.className = 'empty-shape empty-shape--circle';
-      const square = document.createElement('div');
-      square.className = 'empty-shape empty-shape--square';
-      const triangle = document.createElement('div');
-      triangle.className = 'empty-shape empty-shape--triangle';
-
-      shapes.append(circle, square, triangle);
-
-      const emptyTitle = document.createElement('h1');
-      emptyTitle.className = 'gallery-empty-title';
-      emptyTitle.textContent = 'Games incoming';
-
-      const emptySub = document.createElement('p');
-      emptySub.className = 'gallery-empty-subtitle';
-      emptySub.textContent = 'New games drop every hour. Check back soon.';
-
-      empty.append(shapes, emptyTitle, emptySub);
-      this.galleryEl.append(empty);
+      this.renderEmptyState();
     } else {
-      // Game grid -- games front and center, no hero manifesto
-      const grid = document.createElement('div');
-      grid.className = 'gallery-grid';
-
-      const shapes = ['circle', 'square', 'triangle'] as const;
-      games.forEach((game, i) => {
-        const card = new GameCard(game.meta, shapes[i % 3], () => {
-          this.launchGame(game.meta, game.loader);
-        });
-        grid.appendChild(card.render());
-      });
-
-      this.galleryEl.append(grid);
+      this.renderGameGrid(games);
     }
 
     this.container.appendChild(this.galleryEl);
+  }
+
+  private renderEmptyState(): void {
+    const hero = document.createElement('div');
+    hero.className = 'hero-composition';
+
+    // Geometric shapes layer (behind text)
+    const shapes = document.createElement('div');
+    shapes.className = 'hero-shapes';
+    shapes.setAttribute('aria-hidden', 'true');
+
+    const circle = document.createElement('div');
+    circle.className = 'hero-shape hero-shape--circle';
+
+    const square = document.createElement('div');
+    square.className = 'hero-shape hero-shape--square';
+
+    const triangle = document.createElement('div');
+    triangle.className = 'hero-shape hero-shape--triangle';
+
+    shapes.append(circle, square, triangle);
+
+    // Text layer (above shapes)
+    const text = document.createElement('div');
+    text.className = 'hero-text';
+
+    const heroTitle = document.createElement('h1');
+    heroTitle.className = 'hero-title';
+    const titleForm = document.createTextNode('Form ');
+    const titleAmp = document.createElement('span');
+    titleAmp.className = 'hero-amp';
+    titleAmp.textContent = '&';
+    const titlePlay = document.createTextNode(' Play');
+    heroTitle.append(titleForm, titleAmp, titlePlay);
+
+    const heroSubtitle = document.createElement('p');
+    heroSubtitle.className = 'hero-subtitle';
+    heroSubtitle.textContent = 'Game One Is Coming';
+
+    text.append(heroTitle, heroSubtitle);
+    hero.append(shapes, text);
+
+    this.galleryEl!.appendChild(hero);
+  }
+
+  private renderGameGrid(games: { meta: GameMeta; loader: () => Promise<GameModule> }[]): void {
+    // Section header
+    const sectionHeader = document.createElement('div');
+    sectionHeader.className = 'gallery-section-header';
+
+    const sectionLabel = document.createElement('span');
+    sectionLabel.className = 'gallery-section-label';
+    sectionLabel.textContent = 'Arcade';
+
+    const sectionCount = document.createElement('span');
+    sectionCount.className = 'gallery-section-count';
+    sectionCount.textContent = games.length === 1 ? '1 game' : `${games.length} games`;
+
+    sectionHeader.append(sectionLabel, sectionCount);
+
+    const sectionLine = document.createElement('div');
+    sectionLine.className = 'gallery-section-line';
+    sectionLine.setAttribute('aria-hidden', 'true');
+
+    // Game grid
+    const grid = document.createElement('div');
+    grid.className = 'gallery-grid';
+    grid.setAttribute('role', 'list');
+    grid.setAttribute('aria-label', 'Available games');
+
+    const shapes = ['circle', 'square', 'triangle'] as const;
+    games.forEach((game, i) => {
+      const card = new GameCard(game.meta, shapes[i % 3], () => {
+        this.launchGame(game.meta, game.loader);
+      });
+      const cardEl = card.render();
+      cardEl.setAttribute('role', 'listitem');
+      grid.appendChild(cardEl);
+    });
+
+    this.galleryEl!.append(sectionHeader, sectionLine, grid);
   }
 
   private async launchGame(meta: GameMeta, loader: () => Promise<GameModule>): Promise<void> {

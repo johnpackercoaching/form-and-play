@@ -5,6 +5,7 @@ export class GameLauncher {
   private onClose: () => void;
   private launcherEl: HTMLElement | null = null;
   private currentModule: GameModule | null = null;
+  private escHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(container: HTMLElement, onClose: () => void) {
     this.container = container;
@@ -16,6 +17,9 @@ export class GameLauncher {
 
     this.launcherEl = document.createElement('div');
     this.launcherEl.className = 'game-launcher';
+    this.launcherEl.setAttribute('role', 'dialog');
+    this.launcherEl.setAttribute('aria-label', `Playing ${meta.title}`);
+    this.launcherEl.setAttribute('aria-modal', 'true');
 
     // Header
     const header = document.createElement('div');
@@ -28,7 +32,7 @@ export class GameLauncher {
     const close = document.createElement('button');
     close.className = 'game-launcher-close';
     close.textContent = 'Exit';
-    close.setAttribute('aria-label', 'Close game');
+    close.setAttribute('aria-label', `Close ${meta.title} and return to arcade`);
     close.onclick = () => this.onClose();
 
     header.append(title, close);
@@ -40,21 +44,27 @@ export class GameLauncher {
     this.launcherEl.append(header, canvasArea);
     this.container.appendChild(this.launcherEl);
 
+    // Focus the close button for keyboard accessibility
+    close.focus();
+
     // Launch the game
     this.currentModule = mod;
     mod.default.launch(canvasArea);
 
     // ESC to close
-    const escHandler = (e: KeyboardEvent) => {
+    this.escHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        document.removeEventListener('keydown', escHandler);
         this.onClose();
       }
     };
-    document.addEventListener('keydown', escHandler);
+    document.addEventListener('keydown', this.escHandler);
   }
 
   destroy(): void {
+    if (this.escHandler) {
+      document.removeEventListener('keydown', this.escHandler);
+      this.escHandler = null;
+    }
     if (this.currentModule?.default.destroy) {
       this.currentModule.default.destroy();
     }
