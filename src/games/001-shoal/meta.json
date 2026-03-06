@@ -1,0 +1,8 @@
+{
+  "id": "001-shoal",
+  "title": "SHOAL",
+  "description": "Grow your school of fish by collecting drifting petals. Dodge oxide crystals. Grab the catalyst to go invincible. How big can your shoal get?",
+  "created": "2026-03-06",
+  "palette": ["#00DDFF", "#FF4444", "#FFB8E0", "#FFFFFF"],
+  "tags": ["action", "survival", "arcade"]
+}
