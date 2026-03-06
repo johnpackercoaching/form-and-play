@@ -69,10 +69,14 @@ jobs:
             echo "action=new" >> $GITHUB_OUTPUT
           fi
 
-  create-game:
+  prepare-game:
     needs: check-last-run
     if: needs.check-last-run.outputs.action != 'skip'
     runs-on: ubuntu-latest
+    outputs:
+      build_id: ${{ steps.idea.outputs.build_id }}
+      prompt: ${{ steps.idea.outputs.prompt }}
+      user_name: ${{ steps.idea.outputs.user_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -105,16 +109,13 @@ jobs:
           echo "Build ID: $BUILD_ID"
           echo "User: $USER_NAME"
 
-      - name: Trigger game builder
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run game-builder.yml \
-            --repo ${{ github.repository }} \
-            -f build_id="${{ steps.idea.outputs.build_id }}" \
-            -f request_text="${{ steps.idea.outputs.prompt }}" \
-            -f game_id="" \
-            -f user_email="auto-builder@form-and-play.game" \
-            -f user_name="${{ steps.idea.outputs.user_name }}"
-
-          echo "Triggered game-builder.yml with words: ${{ steps.idea.outputs.prompt }}"
+  build-game:
+    needs: prepare-game
+    uses: ./.github/workflows/game-builder.yml
+    with:
+      build_id: ${{ needs.prepare-game.outputs.build_id }}
+      request_text: ${{ needs.prepare-game.outputs.prompt }}
+      game_id: ''
+      user_email: 'auto-builder@form-and-play.game'
+      user_name: ${{ needs.prepare-game.outputs.user_name }}
+    secrets: inherit

@@ -22,6 +22,28 @@ on:
         description: 'Name of the user who submitted the request'
         required: false
         type: string
+  workflow_call:
+    inputs:
+      build_id:
+        description: 'Firestore build request document ID'
+        required: true
+        type: string
+      request_text:
+        description: 'The user build request text'
+        required: true
+        type: string
+      game_id:
+        description: 'Target game ID (empty for new game)'
+        required: false
+        type: string
+      user_email:
+        description: 'Email of the user who submitted the request'
+        required: false
+        type: string
+      user_name:
+        description: 'Name of the user who submitted the request'
+        required: false
+        type: string
 
 jobs:
   game-build:
