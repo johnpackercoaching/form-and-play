@@ -3,13 +3,12 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  // TODO: Replace with actual Form & Play Firebase config
-  apiKey: '',
+  apiKey: 'AIzaSyDC1CSN4XlXVcVwyQ2P5soHrX2hpGCy4Ts',
   authDomain: 'form-and-play.firebaseapp.com',
   projectId: 'form-and-play',
-  storageBucket: 'form-and-play.appspot.com',
-  messagingSenderId: '',
-  appId: '',
+  storageBucket: 'form-and-play.firebasestorage.app',
+  messagingSenderId: '13054494592',
+  appId: '1:13054494592:web:7c102c367b778395b5e365',
 };
 
 const app = initializeApp(firebaseConfig);
