@@ -1,0 +1,260 @@
+name: Game Builder
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: 'Firestore build request document ID'
+        required: true
+        type: string
+      request_text:
+        description: 'The user build request text'
+        required: true
+        type: string
+      game_id:
+        description: 'Target game ID (empty for new game)'
+        required: false
+        type: string
+      user_email:
+        description: 'Email of the user who submitted the request'
+        required: false
+        type: string
+      user_name:
+        description: 'Name of the user who submitted the request'
+        required: false
+        type: string
+
+jobs:
+  game-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies and Claude Code CLI
+        run: npm ci && npm install -g @anthropic-ai/claude-code
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Setup environment
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-service-account.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-service-account.json" >> $GITHUB_ENV
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Pre-validate Claude Code authentication
+        id: pre-validate
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if timeout 30 claude -p "test" --max-turns 1 > /dev/null 2>&1; then
+            echo "credits_ok=true" >> $GITHUB_OUTPUT
+            echo "Claude Code authentication OK"
+          else
+            echo "credits_ok=false" >> $GITHUB_OUTPUT
+            echo "Claude Code authentication failed"
+          fi
+
+      - name: Fail early if auth failed
+        if: steps.pre-validate.outputs.credits_ok == 'false'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-service-account.json
+        run: |
+          node scripts/update-build-status.js \
+            --build-id "${{ inputs.build_id }}" \
+            --status "failed" \
+            --fix-description "Claude authentication failed." || true
+          echo "::error::Claude Code authentication failed"
+          exit 1
+
+      - name: Write build input
+        run: |
+          cat > /tmp/game-edit-input.json << 'JSONEOF'
+          ${{ toJSON(inputs) }}
+          JSONEOF
+          echo "Build input written to /tmp/game-edit-input.json"
+          cat /tmp/game-edit-input.json
+
+      - name: Run Claude Game Builder
+        id: claude-build
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-service-account.json
+        run: |
+          PROMPT=$(cat .claude/game-builder-prompt.md)
+
+          claude -p "$PROMPT" \
+            --model opus \
+            --output-format stream-json \
+            --verbose \
+            --allowedTools "Task,Read,Edit,Write,Bash,Glob,Grep,WebFetch,WebSearch" \
+            --dangerously-skip-permissions \
+            2>&1 | tee claude-output.txt
+
+          if [ -f build-result.json ]; then
+            STATUS=$(python3 -c "import json; d=json.load(open('build-result.json')); print(d.get('status','failed'))" 2>/dev/null || echo "failed")
+            DESCRIPTION=$(python3 -c "import json; d=json.load(open('build-result.json')); print(d.get('description',''))" 2>/dev/null || echo "")
+          else
+            STATUS="failed"
+            DESCRIPTION="Claude did not produce build-result.json."
+          fi
+
+          echo "build_status=$STATUS" >> $GITHUB_OUTPUT
+          echo "build_description=$DESCRIPTION" >> $GITHUB_OUTPUT
+
+      - name: Upload agent log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-build-log-${{ inputs.build_id }}
+          path: |
+            claude-output.txt
+            build-result.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Determine game to test
+        if: steps.claude-build.outputs.build_status == 'completed'
+        id: qa-target
+        run: |
+          GAME_ID=""
+          if [ -f build-result.json ]; then
+            GAME_ID=$(python3 -c "import json; d=json.load(open('build-result.json')); print(d.get('game_id',''))" 2>/dev/null || echo "")
+          fi
+          if [ -z "$GAME_ID" ]; then
+            GAME_ID=$(ls -td src/games/[0-9]* 2>/dev/null | head -1 | xargs -I{} basename {} 2>/dev/null || echo "")
+          fi
+          echo "game_id=$GAME_ID" >> $GITHUB_OUTPUT
+          echo "Gameplay QA target: $GAME_ID"
+
+      - name: Start dev server for QA
+        if: steps.claude-build.outputs.build_status == 'completed' && steps.qa-target.outputs.game_id != ''
+        run: |
+          npx vite --port 5175 --strictPort &
+          echo $! > /tmp/devserver.pid
+          for i in $(seq 1 60); do
+            if curl -s http://localhost:5175 > /dev/null 2>&1; then
+              echo "Dev server ready (took ${i}s)"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Generate game thumbnail
+        if: steps.claude-build.outputs.build_status == 'completed' && steps.qa-target.outputs.game_id != ''
+        id: gen-thumbnail
+        run: |
+          GAME_ID="${{ steps.qa-target.outputs.game_id }}"
+          mkdir -p public/thumbnails
+
+          GAME_ID_ENV="$GAME_ID" node -e "
+          const { chromium } = require('playwright');
+          (async () => {
+            const gameId = process.env.GAME_ID_ENV;
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+            try {
+              await page.goto('http://localhost:5175', { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await page.waitForSelector('.game-card', { timeout: 15000 });
+              const card = await page.waitForSelector('[data-game-id=\"' + gameId + '\"]', { timeout: 10000 });
+              await card.click();
+              const canvas = await page.waitForSelector('canvas', { timeout: 15000 });
+              await new Promise(r => setTimeout(r, 5000));
+              await canvas.screenshot({ path: 'public/thumbnails/' + gameId + '.png' });
+              console.log('Thumbnail saved');
+            } catch (err) {
+              console.log('FAIL: ' + err.message);
+              process.exit(1);
+            } finally {
+              await browser.close();
+            }
+          })();
+          " 2>&1
+          echo "thumbnail_generated=$([[ $? -eq 0 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -f /tmp/devserver.pid ]; then
+            kill $(cat /tmp/devserver.pid) 2>/dev/null || true
+            rm -f /tmp/devserver.pid
+          fi
+
+      - name: Clean up agent artifacts before PR
+        if: steps.claude-build.outputs.build_status == 'completed'
+        run: |
+          rm -f claude-output.txt build-result.json
+          echo "Removed agent artifacts"
+
+      - name: Create Pull Request
+        if: steps.claude-build.outputs.build_status == 'completed'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GH_PAT }}
+          branch: game-build/${{ inputs.build_id }}
+          title: "Game Build: ${{ inputs.build_id }}"
+          delete-branch: true
+          body: |
+            ## Game Build Request
+
+            **Build ID:** `${{ inputs.build_id }}`
+
+            **Request:**
+            > ${{ inputs.request_text }}
+
+            **What was built:**
+            ${{ steps.claude-build.outputs.build_description }}
+
+            ---
+            Generated by Form & Play Game Builder.
+          labels: game-builder
+
+      - name: Auto-merge Pull Request
+        if: steps.create-pr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          gh pr merge "$PR_NUMBER" --squash --delete-branch
+          echo "PR #$PR_NUMBER merged"
+
+      - name: Update Firestore build status
+        if: always() && steps.pre-validate.outputs.credits_ok == 'true'
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-service-account.json
+        run: |
+          BUILD_STATUS="${{ steps.claude-build.outputs.build_status }}"
+          BUILD_DESC="${{ steps.claude-build.outputs.build_description }}"
+          if [ "$BUILD_STATUS" = "completed" ]; then
+            node scripts/update-build-status.js \
+              --build-id "${{ inputs.build_id }}" \
+              --status "completed" \
+              --fix-description "${BUILD_DESC:-Build completed}" || true
+          else
+            node scripts/update-build-status.js \
+              --build-id "${{ inputs.build_id }}" \
+              --status "failed" \
+              --fix-description "${BUILD_DESC:-Build failed}" || true
+          fi
+
+      - name: Clean up
+        if: always()
+        run: rm -f /tmp/firebase-service-account.json /tmp/game-edit-input.json

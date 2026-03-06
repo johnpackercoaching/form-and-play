@@ -1,0 +1,292 @@
+/* ═══════════════════════════════════════════════════════════════
+   FORM & PLAY — Arcade Gallery
+   Black canvas. Bold geometry. 4 colors + black. No decoration.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --fp-black: #000000;
+  --fp-white: #ffffff;
+  --fp-amber: #f0a000;
+  --fp-red: #ff3333;
+  --fp-blue: #3366ff;
+  --fp-gray: #1a1a1a;
+  --fp-gray-mid: #333333;
+
+  --fp-font: 'Inter', sans-serif;
+  --fp-mono: 'JetBrains Mono', monospace;
+
+  --fp-space-xs: 4px;
+  --fp-space-sm: 8px;
+  --fp-space-md: 16px;
+  --fp-space-lg: 32px;
+  --fp-space-xl: 64px;
+  --fp-space-2xl: 128px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  background: var(--fp-black);
+  color: var(--fp-white);
+  font-family: var(--fp-font);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── Navigation ─────────────────────────────────────────── */
+.gallery-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--fp-space-md) var(--fp-space-lg);
+  background: var(--fp-black);
+  border-bottom: 3px solid var(--fp-white);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fp-space-sm);
+  cursor: pointer;
+}
+
+.nav-title {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  text-transform: uppercase;
+  color: var(--fp-white);
+}
+
+.nav-mark {
+  width: 20px;
+  height: 20px;
+  background: var(--fp-amber);
+  display: inline-block;
+}
+
+.nav-count {
+  font-family: var(--fp-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fp-amber);
+}
+
+/* ── Hero ───────────────────────────────────────────────── */
+.gallery-hero {
+  padding: var(--fp-space-2xl) var(--fp-space-lg) var(--fp-space-xl);
+  text-align: left;
+  max-width: 960px;
+}
+
+.hero-title {
+  font-size: 80px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -3px;
+  text-transform: uppercase;
+  color: var(--fp-white);
+  margin-bottom: var(--fp-space-lg);
+}
+
+.hero-title em {
+  font-style: normal;
+  color: var(--fp-amber);
+}
+
+.hero-subtitle {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--fp-gray-mid);
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+/* ── Game Grid ──────────────────────────────────────────── */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 3px;
+  padding: 0 var(--fp-space-lg) var(--fp-space-xl);
+}
+
+/* ── Game Card ──────────────────────────────────────────── */
+.game-card {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--fp-gray);
+  border: 3px solid transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.game-card:hover {
+  border-color: var(--fp-amber);
+}
+
+.game-card:active {
+  border-color: var(--fp-white);
+}
+
+.game-card-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.game-card-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--fp-space-md);
+  background: linear-gradient(transparent, rgba(0,0,0,0.95));
+}
+
+.game-card-title {
+  font-size: 16px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fp-white);
+  margin-bottom: var(--fp-space-xs);
+}
+
+.game-card-principle {
+  font-family: var(--fp-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fp-amber);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ── Game Card Geometric Accent ─────────────────────────── */
+.game-card-accent {
+  position: absolute;
+  top: var(--fp-space-md);
+  right: var(--fp-space-md);
+  width: 24px;
+  height: 24px;
+}
+
+.game-card-accent--circle {
+  border-radius: 50%;
+  background: var(--fp-red);
+}
+
+.game-card-accent--square {
+  background: var(--fp-blue);
+}
+
+.game-card-accent--triangle {
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 24px solid var(--fp-amber);
+  background: transparent;
+}
+
+/* ── Game Launcher ──────────────────────────────────────── */
+.game-launcher {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--fp-black);
+  display: flex;
+  flex-direction: column;
+}
+
+.game-launcher-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--fp-space-md) var(--fp-space-lg);
+  border-bottom: 3px solid var(--fp-white);
+}
+
+.game-launcher-title {
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.game-launcher-close {
+  background: none;
+  border: 3px solid var(--fp-white);
+  color: var(--fp-white);
+  font-family: var(--fp-mono);
+  font-size: 14px;
+  font-weight: 700;
+  padding: var(--fp-space-xs) var(--fp-space-md);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.15s, color 0.15s;
+}
+
+.game-launcher-close:hover {
+  background: var(--fp-white);
+  color: var(--fp-black);
+}
+
+.game-launcher-canvas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Empty State ────────────────────────────────────────── */
+.gallery-empty {
+  padding: var(--fp-space-2xl) var(--fp-space-lg);
+  text-align: center;
+}
+
+.gallery-empty-title {
+  font-size: 48px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--fp-gray-mid);
+  margin-bottom: var(--fp-space-md);
+}
+
+.gallery-empty-subtitle {
+  font-family: var(--fp-mono);
+  font-size: 14px;
+  color: var(--fp-gray-mid);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 48px;
+    letter-spacing: -2px;
+  }
+
+  .gallery-grid {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 0 var(--fp-space-md) var(--fp-space-lg);
+  }
+
+  .gallery-hero {
+    padding: var(--fp-space-xl) var(--fp-space-md) var(--fp-space-lg);
+  }
+
+  .gallery-nav {
+    padding: var(--fp-space-sm) var(--fp-space-md);
+  }
+}

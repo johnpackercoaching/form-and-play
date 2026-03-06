@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.DS_Store
+src/generated/game-registry.json
+functions/lib
+recordings/

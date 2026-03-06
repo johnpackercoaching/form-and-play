@@ -1,0 +1,8 @@
+{
+  "id": "_template",
+  "title": "Template Game",
+  "description": "A template for new games",
+  "created": "2026-01-01",
+  "palette": ["#f0a000", "#ff3333", "#3366ff", "#ffffff"],
+  "principle": "economy"
+}

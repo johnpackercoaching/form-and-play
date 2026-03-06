@@ -1,0 +1,49 @@
+Build a game where the visual form IS the mechanic. The shapes the player interacts with are not representations of objects -- they ARE the gameplay. Circles roll, squares stack, triangles cut. Use only geometric primitives (circles, squares, triangles) on a black background. Maximum 4 colors. The game should be immediately understandable without instructions because the form communicates the rules.
+---
+Create a rhythm game where typography is the instrument. Letters fall from the top and the player must type them before they reach the bottom. But the twist: each letter is rendered at a size proportional to its musical beat -- big letters are bass notes, small letters are treble. The visual rhythm IS the musical rhythm. Use only one typeface (Inter Black) at varying sizes. Two colors plus black.
+---
+Build a game about negative space. The playing field is white shapes on black. The player controls the black space BETWEEN the shapes, navigating through gaps that open and close. The game is about what is NOT there. Minimal color: white and one accent color for the player's position. The beauty is in the emptiness.
+---
+Create a game where color is the only mechanic. No shapes move. Instead, the player changes colors of regions on a grid to solve puzzles. Adjacent matching colors merge. The goal is to reduce the board to a single color in minimum moves. Use exactly 4 bold colors on black. No borders, no labels -- color alone communicates state.
+---
+Build a balance game where visual weight IS physical weight. Heavy-looking elements (large, dark, dense) weigh more than light-looking elements (small, bright, sparse). The player arranges elements on a beam to achieve balance. The game teaches that visual weight is real -- design has physics. Use geometric shapes with varying density patterns.
+---
+Create a game where the grid is the game. An 8x8 grid where each cell can be on or off. The player clicks to toggle cells, but each click also affects neighbors according to a hidden pattern. The goal is to light up specific formations. The grid itself -- its rhythm of on/off, its emerging patterns -- is both the interface and the art. Black and amber only.
+---
+Build a pursuit game using only circles of different sizes. A large circle chases small circles. The player controls one small circle. Larger circles move slower, smaller circles move faster. Size IS speed. No sprites, no textures -- pure geometry communicating pure physics. Three colors: white for player, red for chaser, blue for targets to collect.
+---
+Create a game about hierarchy. Elements of different sizes and colors compete for the player's attention. The player must click them in order from most visually dominant to least. But the hierarchy changes each round -- sometimes size dominates, sometimes color, sometimes position. The game teaches the eye to read visual hierarchy. Use all 4 palette colors at varying scales.
+---
+Build a tower defense game using only typography. Enemies are lowercase letters marching across the screen. Towers are uppercase letters that shoot punctuation marks. The visual metaphor is literal: CAPITAL letters defend against lowercase threats. Upgrade by bolding or increasing font weight. Monospace font on black background.
+---
+Create a memory game where instead of matching identical cards, the player matches design principles. One card shows a layout that demonstrates "hierarchy" and the other shows a different layout that also demonstrates "hierarchy." The player learns to recognize design principles across different visual executions. Clean geometric layouts on each card.
+---
+Build a game where the player draws with constraints. Given exactly 3 straight lines, create a shape that matches a target silhouette. Then 4 lines. Then 5. The game proves that economy of means -- doing more with less -- creates better design than unlimited freedom. Black lines on white, amber for the target silhouette.
+---
+Create a game about visual tension. Two shapes on screen repel or attract each other based on their contrast. Similar shapes in similar colors attract (boring, low tension). Different shapes in contrasting colors repel (dynamic, high tension). The player must arrange shapes to create maximum visual tension without anything flying off screen. Pure geometry, 4 colors.
+---
+Build a snake game where the snake is a growing typographic sentence. Each food item is a letter. As the snake grows, it spells words, then phrases. The snake's body IS readable text. When it forms a complete sentence, the level is complete. The game makes typography physical and playful. White text on black. The sentence wraps when the snake turns.
+---
+Create a game about the power of reduction. Start with a cluttered screen full of decorative elements. The player removes elements one at a time. After each removal, a score shows how much the remaining design improved or worsened. The goal: remove the maximum number of elements while keeping the design effective. The game teaches that less IS more when you cut the right things.
+---
+Build a game where the player IS a geometric shape that transforms. Start as a circle (fast, rolls easily). Press a key to become a square (stable, can stack). Press another to become a triangle (sharp, can cut through barriers). Each form has strengths and weaknesses. The visual transformation IS the mechanic -- form literally becomes function. Three shapes, three colors, black background.
+---
+Create a racing game on a Mondrian-style grid. The track is defined by the borders of colored rectangles. The player navigates a small circle along the thick black gridlines. Turns are right angles only. Speed zones are colored rectangles -- red is slow, blue is fast, amber is boost. The grid is both the aesthetic and the level design.
+---
+Build a game about conviction. The player faces design choices: bold or timid? Each round presents two options -- one committed (thick lines, saturated color, decisive alignment) and one hedging (thin lines, washed-out color, centered-everything). Choose the committed option to score. Choose the timid option and lose points. The game rewards design courage.
+---
+Create a game where sound is visualized as geometry. Each musical note generates a shape on screen. Low notes make large circles, high notes make small triangles. The shapes stack and interact physically. The player triggers notes to build structures that reach a goal height. Music becomes architecture. Black background, shapes in amber and white.
+---
+Build a breakout game where the paddle, ball, and bricks are all the same shape at different scales. Everything is a rectangle -- the paddle is wide, the ball is a small square, the bricks are medium. The game demonstrates that a single form at different scales creates hierarchy without complexity. One shape, three sizes, three colors plus black.
+---
+Create a puzzle game about whitespace. The player arranges text blocks on a page. Too close together: cluttered, penalty. Too far apart: disconnected, penalty. Just right: the whitespace creates readable rhythm, bonus points. The game teaches that the space between elements is as important as the elements themselves. Black text, white space, amber highlights for optimal zones.
+---
+Build a game where the player paints with geometric stamps. Click to place circles, squares, or triangles. They interact physically -- rolling, stacking, sliding. The goal is to get a specific shape to a target zone using only stamped geometry as terrain. The canvas starts black. Every stamp uses one of 4 colors. Economy matters: fewer stamps = higher score.
+---
+Create a game about visual rhythm. Elements pulse in a pattern. The player must continue the pattern by placing the next element in the correct position, size, and color. Like a visual metronome -- the rhythm is spatial, not temporal. Alternating sizes, alternating colors, alternating positions. Miss the rhythm and the sequence breaks. Restart. Pure geometry on black.
+---
+Build a game where transparency reveals. Layers of colored rectangles overlap. Where they overlap, new colors appear (additive color mixing). Hidden beneath specific overlap combinations are target shapes. The player drags rectangles to reveal all targets. The game teaches that layering creates meaning. Red, blue, and amber layers on black -- overlaps create new hues.
+---
+Create a reflex game using only scale. A shape appears and rapidly grows or shrinks. The player must click it when it reaches exactly the target size -- shown as a dotted outline. Too early or too late misses. The game is about precision and timing, communicated purely through scale change. One shape, one color, one interaction. Economy of means.
+---
+Build a game about the cover test. Each round shows a game screenshot with and without its title. The player rates: "Can you tell what this game is about from the visuals alone?" High-scoring designs pass the cover test. The game curates itself -- as the arcade grows, it teaches players (and The Studio) what good game design looks like.

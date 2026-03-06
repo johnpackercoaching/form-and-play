@@ -1,0 +1,131 @@
+name: Auto Game Builder (Hourly)
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      custom_prompt:
+        description: 'Custom game prompt (overrides random selection)'
+        required: false
+        type: string
+
+jobs:
+  check-last-run:
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.check.outputs.action }}
+      retry_prompt: ${{ steps.check.outputs.retry_prompt }}
+      retry_user: ${{ steps.check.outputs.retry_user }}
+    steps:
+      - name: Check last Game Builder run
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LAST_RUN=$(gh run list --repo ${{ github.repository }} --workflow "Game Builder" --limit 1 --json databaseId,status,conclusion 2>/dev/null | jq '.[0]')
+
+          if [ "$LAST_RUN" = "null" ] || [ -z "$LAST_RUN" ]; then
+            echo "No previous Game Builder runs found — building new game"
+            echo "action=new" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          STATUS=$(echo "$LAST_RUN" | jq -r '.status')
+          CONCLUSION=$(echo "$LAST_RUN" | jq -r '.conclusion')
+          RUN_ID=$(echo "$LAST_RUN" | jq -r '.databaseId')
+
+          echo "Last run: ID=$RUN_ID, status=$STATUS, conclusion=$CONCLUSION"
+
+          if [ "$STATUS" = "in_progress" ] || [ "$STATUS" = "queued" ]; then
+            echo "Previous build $RUN_ID still running — skipping this cycle"
+            echo "action=skip" >> $GITHUB_OUTPUT
+
+          elif [ "$CONCLUSION" = "failure" ]; then
+            echo "Previous build $RUN_ID failed — extracting prompt for retry"
+
+            LOGS=$(gh run view "$RUN_ID" --repo ${{ github.repository }} --log 2>/dev/null || true)
+            PROMPT=$(echo "$LOGS" | grep 'request_text=' | head -1 | sed 's/.*request_text=//' | sed 's/^"//' | sed 's/"$//')
+            USER=$(echo "$LOGS" | grep 'user_name=' | head -1 | sed 's/.*user_name=//' | sed 's/^"//' | sed 's/"$//')
+
+            if [ -n "$PROMPT" ] && [ "$PROMPT" != "null" ] && [ "$PROMPT" != "" ]; then
+              echo "Retrying failed prompt: $PROMPT"
+              echo "action=retry" >> $GITHUB_OUTPUT
+              echo "retry_prompt<<EOF" >> $GITHUB_OUTPUT
+              echo "$PROMPT" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+              echo "retry_user=${USER:-Auto Retry}" >> $GITHUB_OUTPUT
+            else
+              echo "Could not extract failed prompt — building new game instead"
+              echo "action=new" >> $GITHUB_OUTPUT
+            fi
+
+          else
+            echo "Last build succeeded — building new game"
+            echo "action=new" >> $GITHUB_OUTPUT
+          fi
+
+  create-game:
+    needs: check-last-run
+    if: needs.check-last-run.outputs.action != 'skip'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select game prompt
+        id: idea
+        run: |
+          ACTION="${{ needs.check-last-run.outputs.action }}"
+          CUSTOM_PROMPT="${{ inputs.custom_prompt }}"
+
+          if [ -n "$CUSTOM_PROMPT" ]; then
+            echo "$CUSTOM_PROMPT" > /tmp/game-prompt.txt
+            USER_NAME="Manual Dispatch"
+          elif [ "$ACTION" = "retry" ]; then
+            cat <<'PROMPT_EOF' > /tmp/game-prompt.txt
+          ${{ needs.check-last-run.outputs.retry_prompt }}
+          PROMPT_EOF
+            USER_NAME="${{ needs.check-last-run.outputs.retry_user }}"
+            echo "Retrying failed build prompt"
+          else
+            PROMPT_COUNT=$(grep -c '^---$' .github/game-prompts.txt)
+            PROMPT_COUNT=$((PROMPT_COUNT + 1))
+            RANDOM_INDEX=$((RANDOM % PROMPT_COUNT))
+
+            awk -v idx="$RANDOM_INDEX" '
+              BEGIN { count = 0 }
+              /^---$/ { count++; next }
+              count == idx { print }
+            ' .github/game-prompts.txt | sed '/^$/d' > /tmp/game-prompt.txt
+            USER_NAME="Hourly Auto Builder"
+          fi
+
+          BUILD_ID="auto-$(date -u +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)"
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "user_name=$USER_NAME" >> $GITHUB_OUTPUT
+
+          echo "Action: $ACTION"
+          echo "Selected prompt:"
+          cat /tmp/game-prompt.txt
+          echo ""
+          echo "Build ID: $BUILD_ID"
+          echo "User: $USER_NAME"
+
+      - name: Trigger game builder
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          PROMPT=$(cat /tmp/game-prompt.txt)
+          BUILD_ID="${{ steps.idea.outputs.build_id }}"
+          USER_NAME="${{ steps.idea.outputs.user_name }}"
+
+          gh workflow run game-builder.yml \
+            --repo ${{ github.repository }} \
+            -f build_id="$BUILD_ID" \
+            -f request_text="$PROMPT" \
+            -f game_id="" \
+            -f user_email="auto-builder@form-and-play.game" \
+            -f user_name="$USER_NAME"
+
+          echo "Triggered game-builder.yml with build_id=$BUILD_ID (user=$USER_NAME)"
